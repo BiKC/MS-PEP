@@ -87,7 +87,6 @@ ui <- fluidPage(# Application title
     sidebarPanel(
       fileInput("data", "Raw data:"),
       textInput("seq", "Sequence:", value = "",placeholder = "Enter sequence here"),
-      
       actionButton("Submit", "Submit", value = 0),
       tags$br(),
       tags$br(),
@@ -109,6 +108,7 @@ ui <- fluidPage(# Application title
         ),
         checkboxInput("SNM", "Show not matching sequences"),
         checkboxInput("Z", "Add z-value of 2"),
+        checkboxInput("proteolitic", "Is proteolytically cleaved? (adds OH to b type and subtracts H from y type fragments)", value = T),
         #numericInput("Nterm","N-term modification",0), #[WIP]
         numericInput("Cterm", "C-term modification",-1),
         label = "Advanced Settings"
@@ -151,7 +151,6 @@ server <- function(input, output, session) {
       Zval <<- 1
     }
   })
-  
   observeEvent(input$Submit, {
     peaks.df2 <<- NULL
     withProgress(message = 'Calculating',
@@ -220,7 +219,8 @@ server <- function(input, output, session) {
                        ),
                        2
                      )
-                   
+                   theor_frag.df$ion <- ""
+                   theor_frag.df$type <- ""
                    theor_frag.df <-
                      rbind(
                        theor_frag.df,
@@ -248,8 +248,11 @@ server <- function(input, output, session) {
                                z = 1:2
                              ))
                    }
+                   if (input$proteolitic) {
+                     theor_frag.df[which(theor_frag.df$type=="b"),"mz"] <- theor_frag.df[which(theor_frag.df$type=="b"),"mz"] + (15.994915+1.007825)
+                     theor_frag.df[which(theor_frag.df$type=="y"),"mz"] <- theor_frag.df[which(theor_frag.df$type=="y"),"mz"] - (1.007825)
+                   }
                    theor_frag.df <<- unique(theor_frag.df)
-                   
                    incProgress(0.3, detail = "Matching theoretical with practical")
                    
                    start <- proc.time()
