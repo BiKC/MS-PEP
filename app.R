@@ -11,82 +11,57 @@
 # installed.packages()[, "Package"]
 pkg <- installed.packages()[, "Package"]
 
+# Packages used
+usedpkg <-
+  c(
+    "MALDIquant",
+    "MALDIquantForeign",
+    "xlsx",
+    "stringr",
+    "shiny",
+    "shinyWidgets",
+    "plotly"
+  )
 
+#See if packages is installed an load package
 
-#library("mzR") #No longer necesary
-
-## Check if MALDIquant package is installed
-# if(!('MALDIquant' %in% pkg)) {
-#   install.packages("MALDIquant")
+#Client side
+# for (pack in usedpkg) {
+#   if (!(pack %in% pkg)) {
+#     install.packages(pack)
+#   }
+#   library(pack, character.only = T)
 # }
-library("MALDIquant") ## the software package
+# 
 
-## Check if MALDIquantForeign package is installed
-## (may need to install xml2, libxml2, libxml2-devel)
-# if(!('MALDIquantForeign' %in% pkg)) {
-#   install.packages("MALDIquantForeign")
-# }
+
+#Server side
+library("MALDIquant")
 library("MALDIquantForeign")
-
-## Working with peptide sequences
-## Bioconductor packages
-# if(!('BiocManager' %in% pkg)) {
-#   install.packages("BiocManager")
-# }
-# biopkg <- BiocManager::available()
-
-## MSnbase package in bioconductor
-## When getting ncdf4 error --> install netcdf, netcdf-devel, ncdf4
-# if(!('MSnbase' %in% pkg) & 'MSnbase' %in% biopkg) {
-#   BiocManager::install("MSnbase")
-# }
-#library("MSnbase")
-
-## Xlsx package
-# if(!('xlsx' %in% pkg)) {
-#   install.packages("xlsx")
-# }
 library("xlsx")
-
-## Stringr package
-# if(!('stringr' %in% pkg)) {
-#   install.packages("stringr")
-# }
 library("stringr")
-
-## shiny package
-# if(!('shiny' %in% pkg)) {
-#   install.packages("shiny")
-# }
 library("shiny")
-
-## shinhyWidgets package
-# if(!('shinhyWidgets' %in% pkg)) {
-#   install.packages("shinhyWidgets")
-# }
 library("shinyWidgets")
-
-## plotly package
-# if(!('plotly' %in% pkg)) {
-#   install.packages("plotly")
-# }
 library("plotly")
 
+#Extra functions needed
 source("mzR-functions.R")
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(# Application title
-  tags$div(
-    
-    tags$h1(
-      tags$img(src="https://www.howest.be/sites/default/files/styles/width_500/public/howest-university-of-applied-sciences-logo.png?itok=scypq5Z0",width="10%",style="z-index:5"),
-      "MS-PEP data analyzer")),
+ui <- fluidPage(
+  # Application title
+  tags$div(tags$h1(
+    tags$img(src = "https://www.howest.be/sites/default/files/styles/width_500/public/howest-university-of-applied-sciences-logo.png?itok=scypq5Z0", width =
+               "10%", style = "z-index:5"),
+    "MS-PEP data analyzer"
+  )),
   
   # Sidebar with a slider input for number of bins
   sidebarLayout(
     sidebarPanel(
       fileInput("data", "Raw data:"),
-      textInput("seq", "Sequence:", value = "",placeholder = "Enter sequence here"),
+      #Test sequence: ARTRARRPESKATNATLDPRSFLLRNPNDK
+      textInput("seq", "Sequence:", value = "", placeholder = "Enter sequence here"),
       actionButton("Submit", "Submit", value = 0),
       tags$br(),
       tags$br(),
@@ -108,9 +83,13 @@ ui <- fluidPage(# Application title
         ),
         checkboxInput("SNM", "Show not matching sequences"),
         checkboxInput("Z", "Add z-value of 2"),
-        checkboxInput("proteolitic", "Is proteolytically cleaved? (adds OH to b type and subtracts H from y type fragments)", value = T),
+        checkboxInput(
+          "proteolitic",
+          "Is proteolytically cleaved? (adds OH to b type and subtracts H from y type fragments)",
+          value = T
+        ),
         #numericInput("Nterm","N-term modification",0), #[WIP]
-        numericInput("Cterm", "C-term modification",-1),
+        numericInput("Cterm", "C-term modification", -1),
         label = "Advanced Settings"
       ),
       tags$br(),
@@ -128,74 +107,274 @@ ui <- fluidPage(# Application title
       )
     )
   ),
-  tags$div(tags$a("Howest bioinformatics",href="https://www.howest.be/en/programmes/advanced-bachelor/bioinformatics",style="color:white",target="_blank"), "|" ,tags$a("bit@bio-informatica.be",href="mailto:bit@bio-informatica.be", style="color:white"),
-    style="position: fixed;
-      left: 0;
-      bottom: 0;
-      width: 100%;
-      height: 2em;
-      background-color: darkgray;
-      color: white;
-      text-align: center;
-      align-items: center"
+  tags$div(
+    tags$a(
+      "Howest bioinformatics",
+      href = "https://www.howest.be/en/programmes/advanced-bachelor/bioinformatics",
+      style = "color:white",
+      target = "_blank"
+    ),
+    "|" ,
+    tags$a("bit@bio-informatica.be", href = "mailto:bit@bio-informatica.be", style =
+             "color:white"),
+    style = "position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 2em;
+    background-color: darkgray;
+    color: white;
+    text-align: center;
+    align-items: center"
   )
 )
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-  Zval <<- 1
+  
+  #Z value selector, changes on input
+  Zval <- reactiveVal(1)
   reactive({
+    #If ticked: both z == 1 and z == 2, else only 1
     if (input$Z == T) {
-      Zval <<- 1:2
+      Zval <- 1:2
     }
     else {
-      Zval <<- 1
+      Zval <- 1
     }
   })
+  
+  # "Object" including info about file submitted
+  File <-
+    eventReactive(input$Submit, {
+      list(
+        name = input$data$name,
+        location = input$data$datapath,
+        basefile = strsplit(input$data$name , ".txt")[1]
+      )
+    })
+  # First spectogram of file (always since only txt import is implemented)
+  pepspec1 <- reactive(importTxt(File()$location)[[1]])
+  
+  # peaks from pepspec1, Signal to noise 10
+  pepspec1_peaks_30_10 <- reactive(detectPeaks(
+    pepspec1(),
+    method = "SuperSmoother",
+    halfWindowSize = 30,
+    SNR = 10
+  ))
+  
+  # m/z and intensity dataframe of input file. including relative intensity
+  peaks.df.reac <- reactive({
+    sub_spec1 <- pepspec1()#[1:20000]
+    sub_spec_peaks_30_10 <-
+      detectPeaks(
+        sub_spec1,
+        method = "SuperSmoother",
+        halfWindowSize = 30,
+        SNR = 10
+      )
+    inter <- data.frame(
+      #Specifying packages because other package with mz function
+      MALDIquant::mz(sub_spec_peaks_30_10),
+      MALDIquant::intensity(sub_spec_peaks_30_10)
+    )
+    colnames(inter) <- c("m/z", "int")
+    
+    ## relative intensity
+    inter$rel.int <-
+      inter$int / max(inter$int) * 100
+    
+    inter
+  })
+  
+  #Input sequence (same as input$seq)
+  mypeptide <- reactive(input$seq)
+  
+  # Fucntion to calculate theorethical fragments
+  theor_frag_calc <- function(mypeptide) {
+    theor_frag.df <-
+      tail(
+        calculateFragments(
+          paste0("A", mypeptide),
+          type = c("y"),
+          # default
+          z = 1:2,
+          # default
+          modifications = c(Cterm = input$Cterm, Nterm = input$Nterm),
+          neutralLoss = NULL
+        ),
+        2
+      )
+    theor_frag.df$ion <- ""
+    theor_frag.df$type <- ""
+    theor_frag.df <-
+      rbind(theor_frag.df,
+            calculateFragments(
+              mypeptide,
+              type = c("b", "y"),
+              # default
+              z = 1:2,
+              # default
+              modifications = c(Cterm = input$Cterm, Nterm = input$Nterm)
+            ))
+    ## Filter only b type
+    # theor_frag.df[theor_frag.df$type=="b",]
+    ## Filter only y type
+    # theor_frag.df[theor_frag.df$type=="y",]
+    
+    ## Add internal fragments
+    for (n in (nchar(mypeptide)):2) {
+      theor_frag.df <-
+        rbind(theor_frag.df,
+              calculateFragments(
+                substr(mypeptide, 1, n),
+                type = c("b", "y"),
+                z = 1:2
+              ))
+    }
+    if (input$proteolitic) {
+      theor_frag.df[which(theor_frag.df$type == "b"), "mz"] <-
+        theor_frag.df[which(theor_frag.df$type == "b"), "mz"] + (15.994915 + 1.007825)
+      theor_frag.df[which(theor_frag.df$type == "y"), "mz"] <-
+        theor_frag.df[which(theor_frag.df$type == "y"), "mz"] - (1.007825)
+    }
+    theor_frag.df
+  }
+  
+  #Actually calculate the fragments and only keep unique fragments
+  theor_frag.df.react <-
+    reactive(unique(theor_frag_calc(mypeptide())))
+  
+  # expanded dataframe of peaks.df
+  peaks.df2.react <- reactive({
+    peaks.df2 <-
+      setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("m/z", "int", "rel.int"))
+    for (i in 1:nrow(peaks.df.reac())) {
+      current <- peaks.df.reac()[i, "m/z"]
+      #High default large error
+      seq <- ""
+      modification <- ""
+      found <- FALSE
+      
+      for (j in which(sapply(
+        theor_frag.df.react()$mz,
+        FUN = function(x)
+          abs(current - x)
+      ) < 1)) {
+        #for (j in 1:nrow(theor_frag.df)) {
+        #if (abs(current-theor_frag.df[j,"mz"])<1) {
+        found <- TRUE
+        
+        seq <- theor_frag.df.react()[j, "seq"]
+        zval <- theor_frag.df.react()[j, "z"]
+        # * in ion column stands for ammonia fragment
+        # _ in ion column stands for water fragment
+        # Can't have both at same time
+        if (grepl("\\*", theor_frag.df.react()[j, "ion"])) {
+          modification <- "[1xAmonia]"
+        } else if (grepl("\\_", theor_frag.df.react()[j, "ion"])) {
+          modification <- "[1xWater]"
+        }
+        
+        peaks.df2[nrow(peaks.df2) + 1, "m/z"] <-
+          current
+        peaks.df2[nrow(peaks.df2), "int"] <-
+          peaks.df.reac()[i, "int"]
+        peaks.df2[nrow(peaks.df2), "rel.int"] <-
+          peaks.df.reac()[i, "rel.int"]
+        peaks.df2[nrow(peaks.df2), "sequence"] <- seq
+        peaks.df2[nrow(peaks.df2), "Z"] <- zval
+        peaks.df2[nrow(peaks.df2), "modification"] <-
+          modification
+        peaks.df2[nrow(peaks.df2), "error"] <-
+          round(abs(current - theor_frag.df.react()[j, "mz"]), 6)
+        #}
+        
+        
+      }
+      if (!found) {
+        peaks.df2[nrow(peaks.df2) + 1, "m/z"] <- peaks.df.reac()[i, "m/z"]
+        peaks.df2[nrow(peaks.df2), "int"] <-
+          peaks.df.reac()[i, "int"]
+        peaks.df2[nrow(peaks.df2), "rel.int"] <-
+          peaks.df.reac()[i, "rel.int"]
+        peaks.df2[nrow(peaks.df2), "sequence"] <- ""
+        peaks.df2[nrow(peaks.df2), "Z"] <- ""
+        peaks.df2[nrow(peaks.df2), "modification"] <-
+          ""
+        peaks.df2[nrow(peaks.df2), "error"] <- ""
+      }
+    }
+    peaks.df2 <-
+      peaks.df2[order(peaks.df2$error, decreasing = F),]
+      unique(peaks.df2[order(peaks.df2$rel.int, decreasing = T),])
+  }
+  )
+  
+  # Filter for export
+  peaks.df.filtered.react <- reactive({
+    inter <- peaks.df2.react()[which(
+      peaks.df2.react()$sequence != "" &
+        peaks.df2.react()$rel.int >= input$Relintco &
+        peaks.df2.react()$error <= input$errco &
+        peaks.df2.react()$Z %in% (if (input$Z) {
+          c("", 1, 2)
+        } else{
+          c("", 1)
+        })
+    ),]
+    # Define color gradient
+    cols <- heat.colors(1000)[1000:1]
+    inter$color <- cols[round(inter$rel.int)]
+    
+    for (n in 1:nrow(inter)) {
+      inter[n, "start"] <-
+        str_locate(mypeptide(), inter[n, "sequence"])[1]
+      inter[n, "stop"] <-
+        str_locate(mypeptide(), inter[n, "sequence"])[2]
+    }
+    inter
+  }
+  
+  )
+  
+  #This includes peaks without match
+  peaks.df3.react <- reactive({
+    peaks.df3 <- peaks.df2.react()
+    peaks.df3$sequence <-
+      ifelse(peaks.df3$error > input$errco, "", peaks.df3$sequence)
+    peaks.df3$modification <-
+      ifelse(peaks.df3$error > input$errco,
+             "",
+             peaks.df3$modification)
+    peaks.df3$Z <-
+      ifelse(peaks.df3$error > input$errco, "", peaks.df3$Z)
+    peaks.df3$error <-
+      ifelse(peaks.df3$error > input$errco,
+             paste0(peaks.df3$error, "*"),
+             peaks.df3$error)
+    peaks.df3
+  })
+  
+  #When pressing submit, following will be executed
+  
   observeEvent(input$Submit, {
-    peaks.df2 <<- NULL
     withProgress(message = 'Calculating',
                  value = 0,
                  detail = "Reading data",
                  {
-                   File <- input$data
-                   if (is.null(File) | input$Submit == 0) {
+                   start <- proc.time()
+                   if (is.null(File()) | input$Submit == 0) {
                      return(NULL)
                    }
-                   myfile <<- File$name
-                   myfileloc <<- File$datapath
-                   basefile <<- strsplit(myfile, ".txt")[1]
-                   s <- importTxt(myfileloc)
-                   pepspec1 <<- s[[1]]
                    
                    incProgress(0.2, detail = "Detecting Peaks")
                    
-                   pepspec1_peaks_30_10 <<-
-                     detectPeaks(
-                       pepspec1,
-                       method = "SuperSmoother",
-                       halfWindowSize = 30,
-                       SNR = 10
-                     )
                    
-                   sub_spec1 <- pepspec1#[1:20000]
-                   sub_spec_peaks_30_10 <-
-                     detectPeaks(
-                       sub_spec1,
-                       method = "SuperSmoother",
-                       halfWindowSize = 30,
-                       SNR = 10
-                     )
-                   peaks.df <<-
-                     data.frame(
-                       MALDIquant::mz(sub_spec_peaks_30_10),
-                       MALDIquant::intensity(sub_spec_peaks_30_10)
-                     )
-                   colnames(peaks.df) <- c("m/z", "int")
                    
-                   ## relative intensity
-                   peaks.df$rel.int <- peaks.df$int / max(peaks.df$int) * 100
-                   peaks.df2 <-
-                     setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("m/z", "int", "rel.int"))
+                   peaks.df <- peaks.df.reac()
+                   
+                   
                    
                    ## Show mass values of peaks
                    # MALDIquant::mass(pepspec1_peaks_30_10)
@@ -204,120 +383,24 @@ server <- function(input, output, session) {
                    # MALDIquant::intensity(pepspec1_peaks_30_10)
                    
                    incProgress(0.2, detail = "Calculating theorethical fragments")
-                   mypeptide <<- input$seq
                    
-                   theor_frag.df <-
-                     tail(
-                       calculateFragments(
-                         paste0("A", mypeptide),
-                         type = c("y"),
-                         # default
-                         z = 1:2,
-                         # default
-                         modifications = c(Cterm = input$Cterm, Nterm=input$Nterm),
-                         neutralLoss = NULL
-                       ),
-                       2
-                     )
-                   theor_frag.df$ion <- ""
-                   theor_frag.df$type <- ""
-                   theor_frag.df <-
-                     rbind(
-                       theor_frag.df,
-                       calculateFragments(
-                         mypeptide,
-                         type = c("b", "y"),
-                         # default
-                         z = 1:2,
-                         # default
-                         modifications = c(Cterm = input$Cterm, Nterm=input$Nterm)
-                       )
-                     )
-                   ## Filter only b type
-                   # theor_frag.df[theor_frag.df$type=="b",]
-                   ## Filter only y type
-                   # theor_frag.df[theor_frag.df$type=="y",]
                    
-                   ## Add internal fragments
-                   for (n in (nchar(mypeptide)):2) {
-                     theor_frag.df <-
-                       rbind(theor_frag.df,
-                             calculateFragments(
-                               substr(mypeptide, 1, n),
-                               type = c("b", "y"),
-                               z = 1:2
-                             ))
-                   }
-                   if (input$proteolitic) {
-                     theor_frag.df[which(theor_frag.df$type=="b"),"mz"] <- theor_frag.df[which(theor_frag.df$type=="b"),"mz"] + (15.994915+1.007825)
-                     theor_frag.df[which(theor_frag.df$type=="y"),"mz"] <- theor_frag.df[which(theor_frag.df$type=="y"),"mz"] - (1.007825)
-                   }
-                   theor_frag.df <<- unique(theor_frag.df)
+                   
+                   theor_frag.df <- theor_frag.df.react()
                    incProgress(0.3, detail = "Matching theoretical with practical")
                    
-                   start <- proc.time()
                    
-                   for (i in 1:nrow(peaks.df)) {
-                     current <- peaks.df[i, "m/z"]
-                     #High default large error
-                     seq <- ""
-                     modification <- ""
-                     found <- FALSE
-                     
-                     for (j in which(sapply(
-                       theor_frag.df$mz,
-                       FUN = function(x)
-                         abs(current - x)
-                     ) < 1)) {
-                       #for (j in 1:nrow(theor_frag.df)) {
-                       #if (abs(current-theor_frag.df[j,"mz"])<1) {
-                       found <- TRUE
-                       
-                       seq <- theor_frag.df[j, "seq"]
-                       zval <- theor_frag.df[j, "z"]
-                       # * in ion column stands for ammonia fragment
-                       # _ in ion column stands for water fragment
-                       # Can't have both at same time
-                       if (grepl("\\*", theor_frag.df[j, "ion"])) {
-                         modification <- "[1xAmonia]"
-                       } else if (grepl("\\_", theor_frag.df[j, "ion"])) {
-                         modification <- "[1xWater]"
-                       }
-                       
-                       peaks.df2[nrow(peaks.df2) + 1, "m/z"] <- current
-                       peaks.df2[nrow(peaks.df2), "int"] <- peaks.df[i, "int"]
-                       peaks.df2[nrow(peaks.df2), "rel.int"] <-
-                         peaks.df[i, "rel.int"]
-                       peaks.df2[nrow(peaks.df2), "sequence"] <- seq
-                       peaks.df2[nrow(peaks.df2), "Z"] <- zval
-                       peaks.df2[nrow(peaks.df2), "modification"] <- modification
-                       peaks.df2[nrow(peaks.df2), "error"] <-
-                         round(abs(current - theor_frag.df[j, "mz"]), 6)
-                       #}
-                       
-                       
-                     }
-                     if (!found) {
-                       peaks.df2[nrow(peaks.df2) + 1, "m/z"] <- peaks.df[i, "m/z"]
-                       peaks.df2[nrow(peaks.df2), "int"] <- peaks.df[i, "int"]
-                       peaks.df2[nrow(peaks.df2), "rel.int"] <-
-                         peaks.df[i, "rel.int"]
-                       peaks.df2[nrow(peaks.df2), "sequence"] <- ""
-                       peaks.df2[nrow(peaks.df2), "Z"] <- ""
-                       peaks.df2[nrow(peaks.df2), "modification"] <- ""
-                       peaks.df2[nrow(peaks.df2), "error"] <- ""
-                     }
-                   }
+                   peaks.df2<-reactive(peaks.df2.react())
                    print(proc.time() - start)
                    
-                   peaks.df2 <- peaks.df2[order(peaks.df2$error, decreasing = F), ]
-                   peaks.df2 <<-
-                     unique(peaks.df2[order(peaks.df2$rel.int, decreasing = T), ])
+                   
                    #incProgress(0.2, detail = "Generating Excel")
                    
                    incProgress(0.3, detail = "Finishing up")
                  })
   })
+  
+  #MS-plot output
   
   output$peakPlot <- renderPlot({
     if (input$Submit != 0) {
@@ -325,60 +408,52 @@ server <- function(input, output, session) {
       par(mfrow = c(1, 1))
       # labels 5 highest peaks
       top5 <-
-        MALDIquant::intensity(pepspec1_peaks_30_10) %in% sort(MALDIquant::intensity(pepspec1_peaks_30_10),
-                                                              decreasing = TRUE)[1:5]
-      ylim_max = max(MALDIquant::intensity(pepspec1_peaks_30_10)) + max(MALDIquant::intensity(pepspec1_peaks_30_10)) *
+        MALDIquant::intensity(pepspec1_peaks_30_10()) %in% sort(MALDIquant::intensity(pepspec1_peaks_30_10()),
+                                                                decreasing = TRUE)[1:5]
+      ylim_max = max(MALDIquant::intensity(pepspec1_peaks_30_10())) + max(MALDIquant::intensity(pepspec1_peaks_30_10())) *
         0.15
       
-      xlim_range <- range(MALDIquant::mass(pepspec1))
+      xlim_range <- range(MALDIquant::mass(pepspec1()))
       plot(
-        pepspec1,
-        main = paste0("Peak detection on ", myfile),
+        pepspec1(),
+        main = paste0("Peak detection on ", File()$name),
         sub = "halfWinSize = 20, SNR = 2",
         xlim = xlim_range,
         ylim = c(0, ylim_max)
       )
-      points(pepspec1_peaks_30_10)
-      noise <- MALDIquant::estimateNoise(pepspec1)
+      points(pepspec1_peaks_30_10())
+      noise <- MALDIquant::estimateNoise(pepspec1())
       lines(noise, col = "red")
       lines(noise[, 1], noise[, 2] * 2, col = "green")
-      labelPeaks(pepspec1_peaks_30_10, index = top5)
+      labelPeaks(pepspec1_peaks_30_10(), index = top5)
       
     }
   })
+  
+  #Output theoretical fragments
   output$TFrag <- renderDataTable({
+    theor_frag.df <- theor_frag.df.react()
     if (input$Submit != 0) {
       theor_frag.df[which(theor_frag.df$z %in% (if (input$Z) {
         c("", 1, 2)
       } else{
         c("", 1)
-      })), ]
+      })),]
     }
   })
   
+  #Output practical fragments
   output$PFrag <- renderDataTable({
-    if (exists("peaks.df2") & input$Submit != 0) {
-      peaks.df3 <- peaks.df2
-      peaks.df3$sequence <-
-        ifelse(peaks.df3$error > input$errco, "", peaks.df3$sequence)
-      peaks.df3$modification <-
-        ifelse(peaks.df3$error > input$errco,
-               "",
-               peaks.df3$modification)
-      peaks.df3$Z <-
-        ifelse(peaks.df3$error > input$errco, "", peaks.df3$Z)
-      peaks.df3$error <-
-        ifelse(peaks.df3$error > input$errco,
-               paste0(peaks.df3$error, "*"),
-               peaks.df3$error)
-      peaks.df3<<- peaks.df3
+    if (exists("peaks.df2.react") & input$Submit != 0) {
+      peaks.df2 <- peaks.df2.react()
+      peaks.df3 <- peaks.df3.react()
       if (input$SNM) {
         unique(peaks.df3[which(peaks.df3$rel.int >= input$Relintco &
                                  peaks.df3$Z %in% (if (input$Z) {
                                    c("", 1, 2)
                                  } else{
                                    c("", 1)
-                                 })), ])
+                                 })),])
         
       }
       else {
@@ -391,7 +466,7 @@ server <- function(input, output, session) {
             } else{
               c("", 1)
             })
-        ), ]
+        ),]
       }
     }
     else {
@@ -399,30 +474,14 @@ server <- function(input, output, session) {
     }
   })
   
+  #Output plotly graph
+  
   output$plly <- renderPlotly({
-    if (exists("peaks.df2") & input$Submit != 0) {
-      peaks.df.filtered <<-
-        peaks.df2[which(
-          peaks.df2$sequence != "" &
-            peaks.df2$rel.int >= input$Relintco &
-            peaks.df2$error <= input$errco &
-            peaks.df2$Z %in% (if (input$Z) {
-              c("", 1, 2)
-            } else{
-              c("", 1)
-            })
-        ), ]
-      for (n in 1:nrow(peaks.df.filtered)) {
-        peaks.df.filtered[n, "start"] <<-
-          str_locate(mypeptide, peaks.df.filtered[n, "sequence"])[1]
-        peaks.df.filtered[n, "stop"] <<-
-          str_locate(mypeptide, peaks.df.filtered[n, "sequence"])[2]
-      }
-      letters <- as.list(unlist(strsplit(mypeptide, "")))
-      # Define color gradient
-      cols <- heat.colors(1000)[1000:1]
-      peaks.df.filtered$color <<-
-        cols[round(peaks.df.filtered$rel.int)]
+    if (exists("peaks.df2.react") & input$Submit != 0) {
+      peaks.df.filtered <- peaks.df.filtered.react()
+      
+      letters <- as.list(unlist(strsplit(mypeptide(), "")))
+      
       plot_ly(peaks.df.filtered) %>%
         add_segments(
           x = ~ start,
@@ -435,7 +494,7 @@ server <- function(input, output, session) {
           title = "",
           xaxis = list(
             title = "position of sequence",
-            range = c(0, nchar(mypeptide)),
+            range = c(0, nchar(mypeptide())),
             ticktext = letters,
             tickvals = 1:30
           ),
@@ -447,33 +506,38 @@ server <- function(input, output, session) {
     }
   })
   
+  # Generate excel file, save as temp.xlsx
+  
   generate <- function() {
+    peaks.df2 <- peaks.df2.react()
+    peaks.df3 <- peaks.df3.react()
+    basefile <- File()$basefile
+    theor_frag.df <- theor_frag.df.react()
     wb <- createWorkbook(type = "xlsx")
     
     ## Create a new sheet in the workbook
     sheet <- createSheet(wb, sheetName = "Peak data")
-    addDataFrame(
-      if (input$SNM) {
-        unique(peaks.df3[which(peaks.df3$rel.int >= input$Relintco &
-                                 peaks.df3$Z %in% (if (input$Z) {
-                                   c("", 1, 2)
-                                 } else{
-                                   c("", 1)
-                                 })), ])
-        
-      }
-      else {
-        peaks.df2[which(
-          peaks.df2$seq != "" &
-            peaks.df2$rel.int >= input$Relintco &
-            peaks.df2$error <= input$errco &
-            peaks.df2$Z %in% (if (input$Z) {
-              c("", 1, 2)
-            } else{
-              c("", 1)
-            })
-        ), ]
-      },
+    addDataFrame(if (input$SNM) {
+      unique(peaks.df3[which(peaks.df3$rel.int >= input$Relintco &
+                               peaks.df3$Z %in% (if (input$Z) {
+                                 c("", 1, 2)
+                               } else{
+                                 c("", 1)
+                               })),])
+      
+    }
+    else {
+      peaks.df2[which(
+        peaks.df2$seq != "" &
+          peaks.df2$rel.int >= input$Relintco &
+          peaks.df2$error <= input$errco &
+          peaks.df2$Z %in% (if (input$Z) {
+            c("", 1, 2)
+          } else{
+            c("", 1)
+          })
+      ),]
+    },
     sheet,
     col.names = TRUE,
     row.names = TRUE)
@@ -481,7 +545,7 @@ server <- function(input, output, session) {
     ## Change column width
     setColumnWidth(sheet,
                    colIndex = 5,
-                   colWidth = nchar(mypeptide))
+                   colWidth = nchar(mypeptide()))
     setColumnWidth(sheet, colIndex = 6, colWidth = 12)
     
     ## Create a new sheet in the workbook
@@ -494,7 +558,7 @@ server <- function(input, output, session) {
     
     ## Add first row with peptide sequence
     # Sequence vector as first row
-    pepseq <- unlist(str_split(mypeptide, pattern = ""))
+    pepseq <- unlist(str_split(mypeptide(), pattern = ""))
     pepseq.df <- data.frame()
     pepseq.df <- rbind(pepseq)
     row1 <- createRow(sheet, rowIndex = 1)
@@ -514,22 +578,12 @@ server <- function(input, output, session) {
     
     setColumnWidth(sheet,
                    colIndex = c + 2,
-                   colWidth = nchar(mypeptide))
+                   colWidth = nchar(mypeptide()))
     setColumnWidth(sheet, colIndex = 6, colWidth = 12)
     ## Add fragment data
     
     # Filter on matched sequence
-    peaks.df.filtered <-
-      peaks.df2[which(
-        peaks.df2$sequence != "" &
-          peaks.df2$rel.int >= input$Relintco &
-          peaks.df2$error <= input$errco &
-          peaks.df2$Z %in% (if (input$Z) {
-            c("", 1, 2)
-          } else{
-            c("", 1)
-          })
-      ), ]
+    peaks.df.filtered <- peaks.df.filtered.react()
     
     # Define color gradient
     cols <- heat.colors(1000)[1000:1]
@@ -539,14 +593,14 @@ server <- function(input, output, session) {
     for (n in 1:nrow(peaks.df.filtered)) {
       # Get start and stop indexes
       positions <-
-        str_locate(mypeptide, peaks.df.filtered[n, "sequence"])
+        str_locate(mypeptide(), peaks.df.filtered[n, "sequence"])
       
       # Make a fragment based on these indexes
       fragment <-
         c(
           rep(0, positions[1] - 1),
           rep(1, positions[2] - positions[1] + 1),
-          rep(0, nchar(mypeptide) - positions[2])
+          rep(0, nchar(mypeptide()) - positions[2])
         )
       # print(fragment)
       
@@ -592,17 +646,17 @@ server <- function(input, output, session) {
     setColumnWidth(sheet, colIndex = c(1:ncol(pepseq.df)), colWidth = 4)
     
     sheet <- createSheet(wb, sheetName = "All comb")
-    addDataFrame(theor_frag.df[which(theor_frag.df$z %in% (
-      if (input$Z) {
-        c("", 1, 2)
-      } else{
-        c("", 1)
-      }
-    )), ], sheet)
+    addDataFrame(theor_frag.df[which(theor_frag.df$z %in% (if (input$Z) {
+      c("", 1, 2)
+    } else{
+      c("", 1)
+    })),], sheet)
     
     ## Save the workbook to a file
     saveWorkbook(wb, paste0("temp.xlsx"))
   }
+  
+  #When exitting, remove temp.xlsx
   
   session$onSessionEnded(function() {
     if (file.exists("temp.xlsx")) {
@@ -611,12 +665,13 @@ server <- function(input, output, session) {
     
   })
   
+  # If press on download
   output$Exp <- downloadHandler(
     if (input$Submit != 0) {
       
     },
     filename = function() {
-      paste0("r-report-", basefile, ".xlsx")
+      paste0("r-report-", File()$basefile, ".xlsx")
     },
     
     content = function(file) {
