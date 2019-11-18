@@ -432,13 +432,15 @@ server <- function(input, output, session) {
   
   #Output theoretical fragments
   output$TFrag <- renderDataTable({
-    theor_frag.df <- theor_frag.df.react()
-    if (input$Submit != 0) {
-      theor_frag.df[which(theor_frag.df$z %in% (if (input$Z) {
-        c("", 1, 2)
-      } else{
-        c("", 1)
-      })),]
+    if(mypeptide() != "") {
+      theor_frag.df <- theor_frag.df.react()
+      if (input$Submit != 0) {
+        theor_frag.df[which(theor_frag.df$z %in% (if (input$Z) {
+          c("", 1, 2)
+        } else{
+          c("", 1)
+        })),]
+      }
     }
   })
   
