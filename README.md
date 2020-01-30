@@ -34,3 +34,7 @@ Upload MS data and insert sequence. Click on submit.
     shiny
     shinyWidgets
     plotly
+
+## Online tool:
+The tool has been published online at:
+https://bioit.shinyapps.io/PARs/
