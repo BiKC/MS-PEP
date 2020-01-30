@@ -1,0 +1,12 @@
+name: PARs
+title: PARs
+username:
+account: bioit
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1205261
+bundleId: 2736061
+url: https://bioit.shinyapps.io/PARs/
+when: 1579280312.2868
+asMultiple: FALSE
+asStatic: FALSE
