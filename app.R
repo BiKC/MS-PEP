@@ -20,7 +20,9 @@ usedpkg <-
     "stringr",
     "shiny",
     "shinyWidgets",
-    "plotly"
+    "plotly",
+    "DT"
+    
   )
 
 #See if packages is installed an load package
@@ -32,10 +34,10 @@ usedpkg <-
 #   }
 #   library(pack, character.only = T)
 # }
-# 
 
 
-#Server side
+
+#Shinyio side
 library("MALDIquant")
 library("MALDIquantForeign")
 library("xlsx")
@@ -43,29 +45,47 @@ library("stringr")
 library("shiny")
 library("shinyWidgets")
 library("plotly")
+library("DT")
+#mzR
 
-#Extra functions needed
-source("mzR-functions.R")
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
+  
+  setBackgroundImage(src = "https://cdn.shopify.com/s/files/1/0068/8216/4806/articles/article_6_Health_potential_of_whey_1080x1620.jpg?v=1563879886"),
+  
+  tags$head(
+    tags$style(HTML('li>a{background-color:white}')),
+    tags$style(HTML('form{background-color:steelblue !important; border-color:rgb(60,110,160) !important}')),
+    tags$style(HTML('form>div>label{color:white !important; font-size:20px}')),
+    tags$style(HTML('h1{font-family: Impact, Charcoal, sans-serif;}')),
+    tags$style(HTML('.shiny-datatable-output{background-color:rgb(221,221,221) !important;}')),
+    tags$style(HTML('div.dataTables_wrapper{background-color:white !important;}'))
+  ),
+  
   # Application title
-  tags$div(tags$h1(
-    tags$img(src = "https://www.howest.be/sites/default/files/styles/width_500/public/howest-university-of-applied-sciences-logo.png?itok=scypq5Z0", width =
-               "10%", style = "z-index:5"),
+    tags$div(tags$h1(
+    tags$img(src = "https://www.howest.be/sites/default/files/styles/width_500/public/howest-university-of-applied-sciences-logo.png?itok=scypq5Z0",
+             width = "15%", style = "z-index:5"),
     "MS-PEP data analyzer"
   )),
   
   # Sidebar with a slider input for number of bins
   sidebarLayout(
     sidebarPanel(
-      fileInput("data", "Raw data:"),
+      
+      fileInput(inputId = "data", label = "Raw data:"),
+      
       #Test sequence: ARTRARRPESKATNATLDPRSFLLRNPNDK
       textInput("seq", "Sequence:", value = "", placeholder = "Enter sequence here"),
+      
       actionButton("Submit", "Submit", value = 0),
+      
       tags$br(),
       tags$br(),
-      dropdown(
+      
+      dropdown(label = "Advanced Settings",
         sliderInput(
           "Relintco",
           "Relative Intensity Cutoff:",
@@ -90,19 +110,25 @@ ui <- fluidPage(
         ),
         #numericInput("Nterm","N-term modification",0), #[WIP]
         numericInput("Cterm", "C-term modification", -1),
-        label = "Advanced Settings"
+        radioButtons("RelInt", label = "Relative intensity reference", choices = c("Highest peak", "Selected peak"),selected ="Highest peak")
+        
       ),
       tags$br(),
-      downloadButton("Exp", "Export to excel")
+      downloadButton("Exp", "Export to excel"),
+      tags$br(),
+      tags$br(),
+      htmlOutput("<h1>selPeak</h1>"),
+      dataTableOutput("Selected")
+      
     ),
     
     # Show a plot of the generated distribution
     mainPanel(
       tabsetPanel(
         type = "tabs",
-        tabPanel("MS-Plot", plotOutput("peakPlot")),
+        tabPanel(title = "MS-Plot", plotOutput("peakPlot")),
         tabPanel("Theoretical fragments", dataTableOutput("TFrag")),
-        tabPanel("Practical fragments", dataTableOutput("PFrag")),
+        tabPanel("Practical fragments", DT::dataTableOutput("PFrag")),
         tabPanel("Visualization", plotlyOutput("plly"))
       )
     )
@@ -130,6 +156,8 @@ ui <- fluidPage(
 )
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
+  #Extra functions needed
+  source("mzR-functions.R")
   
   #Z value selector, changes on input
   Zval <- reactiveVal(1)
@@ -182,7 +210,17 @@ server <- function(input, output, session) {
     
     ## relative intensity
     inter$rel.int <-
-      inter$int / max(inter$int) * 100
+      if (input$RelInt == "Highest peak") {
+        inter$int / max(inter$int) * 100
+      } else {
+        if (!is.null(input$rows[1])){
+          inter$int / as.numeric(input$rows[3]) * 100
+          
+        }else {
+          inter$int / max(inter$int) * 100
+        }
+      }
+      
     
     inter
   })
@@ -190,7 +228,7 @@ server <- function(input, output, session) {
   #Input sequence (same as input$seq)
   mypeptide <- reactive(input$seq)
   
-  # Fucntion to calculate theorethical fragments
+  # Function to calculate theorethical fragments
   theor_frag_calc <- function(mypeptide) {
     theor_frag.df <-
       tail(
@@ -247,8 +285,7 @@ server <- function(input, output, session) {
   
   # expanded dataframe of peaks.df
   peaks.df2.react <- reactive({
-    peaks.df2 <-
-      setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("m/z", "int", "rel.int"))
+    peaks.df2 <- setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("m/z", "int", "rel.int"))
     for (i in 1:nrow(peaks.df.reac())) {
       current <- peaks.df.reac()[i, "m/z"]
       #High default large error
@@ -256,11 +293,7 @@ server <- function(input, output, session) {
       modification <- ""
       found <- FALSE
       
-      for (j in which(sapply(
-        theor_frag.df.react()$mz,
-        FUN = function(x)
-          abs(current - x)
-      ) < 1)) {
+      for (j in which(sapply(theor_frag.df.react()$mz,FUN = function(x) abs(current - x)) < 1)) {
         #for (j in 1:nrow(theor_frag.df)) {
         #if (abs(current-theor_frag.df[j,"mz"])<1) {
         found <- TRUE
@@ -400,6 +433,8 @@ server <- function(input, output, session) {
                  })
   })
   
+  
+  
   #MS-plot output
   
   output$peakPlot <- renderPlot({
@@ -445,21 +480,26 @@ server <- function(input, output, session) {
   })
   
   #Output practical fragments
-  output$PFrag <- renderDataTable({
+  output$PFrag <- DT::renderDataTable({
     if (exists("peaks.df2.react") & input$Submit != 0) {
       peaks.df2 <- peaks.df2.react()
+      test <<- peaks.df2
       peaks.df3 <- peaks.df3.react()
       if (input$SNM) {
-        unique(peaks.df3[which(peaks.df3$rel.int >= input$Relintco &
+        DT::datatable(unique(peaks.df3[which(peaks.df3$rel.int >= input$Relintco &
                                  peaks.df3$Z %in% (if (input$Z) {
                                    c("", 1, 2)
                                  } else{
                                    c("", 1)
-                                 })),])
+                                 })),]),callback = JS("table.on('click.dt', 'tr', function() {
+            var row_=table.row(this).data();
+            var data = [row_];
+           Shiny.onInputChange('rows',data );
+    });"))
         
       }
       else {
-        peaks.df2[which(
+        DT::datatable(peaks.df2[which(
           peaks.df2$seq != "" &
             peaks.df2$rel.int >= input$Relintco &
             peaks.df2$error <= input$errco &
@@ -468,13 +508,46 @@ server <- function(input, output, session) {
             } else{
               c("", 1)
             })
-        ),]
+        ),],selection = "single",callback = JS("table.on('click.dt', 'tr', function() {
+            var row_=table.row(this).data();
+            var data = [row_];
+           Shiny.onInputChange('rows',data );
+    });"))
       }
     }
     else {
       peaks.df2 <<- NULL
     }
-  })
+  },)
+  
+  output$Selected <- renderDataTable({
+    if ((!is.null(input$rows)) && (input$RelInt != "Highest peak")){
+      peaks.df2.react()[which(rownames(peaks.df2.react()) ==as.numeric(input$rows[1])),1:2]
+    }
+    else {
+      NULL
+    }
+    }, 
+      filter="none",
+      selection="none",
+      autoHideNavigation=TRUE,
+      options=list(searching=F,ordering=F,paging=F,lengthChange=F,info=F)
+    )
+  output$selPeak <- renderUI({
+    if ((!is.null(input$rows)) && (input$RelInt != "Highest peak")){
+      "Reference peak for 100% intensity:"
+    }
+    else {
+      NULL
+    }
+  }
+  )
+  
+  # observeEvent(input$rows, {
+  #   print(input$rows[1])
+  #   print(Sys.time())
+  #   
+  # })
   
   #Output plotly graph
   
@@ -607,7 +680,7 @@ server <- function(input, output, session) {
       # print(fragment)
       
       # Define color based on intensity
-      color <- cols[round(peaks.df.filtered[n, "rel.int"] * 10)]
+      color <- cols[round(peaks.df.filtered[n, "rel.int"]/max(peaks.df.filtered$rel.int) * 1000)]
       
       # Style if no match in fragment
       CELL_STYLE <- CellStyle(wb) +
@@ -669,9 +742,6 @@ server <- function(input, output, session) {
   
   # If press on download
   output$Exp <- downloadHandler(
-    if (input$Submit != 0) {
-      
-    },
     filename = function() {
       paste0("r-report-", File()$basefile, ".xlsx")
     },
