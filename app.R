@@ -11,7 +11,6 @@
 # installed.packages()[, "Package"]
 pkg <- installed.packages()[, "Package"]
 
-
 # Packages used
 usedpkg <-
   c(
