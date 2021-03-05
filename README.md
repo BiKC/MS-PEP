@@ -7,11 +7,13 @@ R 3.5 or higher
 Optionally: RStudio or other interface
 
 ## Required data
-MS data in table form:
+1. MS data txt file in tab-separated table form:
 
-  Collumn 1: M/Z
+  Column 1: M/Z
   
-  Collumn 2: Intensity
+  Column 2: Intensity
+  
+2. Peptide sequence that was analyzed
 
 ## How to use:
 
@@ -22,7 +24,7 @@ Uncomment line 28-35 in app.R in case some packages still need to be installed.
 ### All uses:
 Download both app.R and mzR-functions.R files in single directory.
 Run app.R using RStudio or by running following command in R:
-shiny::runApp('Path to directory where saved')
+shiny::runApp('Path to directory where app.R is saved')
 
 Upload MS data and insert sequence. Click on submit.
 
